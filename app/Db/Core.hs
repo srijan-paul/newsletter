@@ -79,9 +79,6 @@ instance FromRow Subscriber
 
 instance ToRow Subscriber
 
-myGmail :: Subscriber
-myGmail = Subscriber "srijannr1@gmail.com" "1" "2021-09-01" True
-
 collectRows :: forall r. (FromRow r) => Statement -> IO [r]
 collectRows stmt = go []
   where
@@ -94,7 +91,7 @@ collectRows stmt = go []
 
 fetchActiveSubscribers :: Db Open -> Subscriber -> IO [Subscriber]
 fetchActiveSubscribers (Db conn) subscriber =
-  query_ @Subscriber conn "SELECT * FROM subscribers WHERE is_subbed = 1"
+  query_ conn "SELECT * FROM subscribers WHERE is_subbed = 1"
 
 insertSubscriber :: Db Open -> Subscriber -> IO ()
 insertSubscriber (Db conn) subscriber = do

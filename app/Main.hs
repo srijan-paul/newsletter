@@ -1,9 +1,11 @@
+import Control.Arrow (ArrowChoice (left))
 import qualified Data.ByteString as BS
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Data.Time (getCurrentTime)
 import Data.Time.Format.ISO8601 (Format (formatShowM), ISO8601 (iso8601Format))
 import Db.Core (Db, OpenDb, Subscriber (..), insertSubscriber, openDB, unsubscribeUser)
+import Email (sendSubscribedEmail)
 import Network.HTTP.Types.Status (mkStatus)
 import qualified Network.Mail.Mime as Mail
 import Relude
@@ -28,24 +30,35 @@ badRequest messageText = do
   text $ TL.fromStrict messageText
   finish
 
+sendFirstMail :: Subscriber -> ActionM ()
+sendFirstMail subscriber = do
+  result <- liftIO (runExceptT $ sendSubscribedEmail subscriber)
+  case result of
+    -- TODO: notify myself in a log fiel that the email failed.
+    Left err -> putStrLn $ "Error sending email: " <> err
+    Right _ -> return ()
+
 subscribeEndpoint :: App -> ActionM ()
 subscribeEndpoint (App db) = do
-  emailAddr <- BS.toStrict <$> body
-  if Validate.isValid emailAddr
+  emailAddrByteStr <- BS.toStrict <$> body
+  if Validate.isValid emailAddrByteStr
     then do
       now <- liftIO getCurrentTime
       let timeS = fromMaybe (show now) (formatShowM iso8601Format now)
-      let newSub =
+          emailAddr = decodeUtf8 emailAddrByteStr :: T.Text
+          newSub =
             Subscriber
               { subscriberIsSubbed = True,
                 subscriberId = "dummyId",
-                subscriberEmail = decodeUtf8 emailAddr,
+                subscriberEmail = emailAddr,
                 subscriberDate = T.pack timeS
               }
 
       liftIO $ insertSubscriber db newSub
-      putStrLn $ "New Subscriber: " <> decodeUtf8 emailAddr
-    else badRequest "Invalid email address"
+      sendFirstMail newSub
+      putStrLn $ "New Subscriber: " <> T.unpack emailAddr
+    else
+      badRequest "Invalid email address"
 
 unsubscribeEndpoint :: App -> ActionM ()
 unsubscribeEndpoint (App db) = do
