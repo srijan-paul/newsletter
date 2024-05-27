@@ -41,7 +41,7 @@ loadTemplate fileName = do
 getUnsubUrl :: T.Text -> Subscriber -> T.Text
 getUnsubUrl serverUrl (Subscriber {subscriberId, subscriberEmail}) =
   let (subId, subEmail) = both encodeForUrl (subscriberId, subscriberEmail)
-   in serverUrl <> "/unsubscribe?id=" <> subscriberId <> "&email=" <> subscriberEmail
+   in serverUrl <> "/unsubscribe?id=" <> subId <> "&email=" <> subEmail 
   where
     encodeForUrl :: T.Text -> T.Text
     encodeForUrl = decodeUtf8 . urlEncode True . encodeUtf8
