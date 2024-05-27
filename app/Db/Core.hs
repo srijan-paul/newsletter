@@ -16,11 +16,13 @@ import Data.Foldable (foldrM)
 import qualified Data.Text as T
 import Database.SQLite.Simple
   ( Connection,
+    NamedParam ((:=)),
     Only (Only),
     Statement,
     close,
     closeStatement,
     execute,
+    executeNamed,
     execute_,
     nextRow,
     open,
@@ -108,9 +110,12 @@ findSubscriberById (Db conn) sid = do
   rows <- query conn "SELECT * FROM subscribers WHERE id = ?" (Only sid)
   return $ listToMaybe rows
 
-unsubscribeUser :: Db Open -> T.Text -> IO ()
-unsubscribeUser (Db conn) sid =
-  execute conn "UPDATE subscribers SET is_subbed = 0 WHERE id = ?" (Only sid)
+unsubscribeUser :: Db Open -> T.Text -> T.Text -> IO ()
+unsubscribeUser (Db conn) sId sEmail =
+  executeNamed
+    conn
+    "UPDATE subscribers SET is_subbed = 0 WHERE id = :id AND email = :email"
+    [":id" := sId, ":email" := sEmail]
 
 initDB :: Connection -> IO (Db Open)
 initDB conn = do

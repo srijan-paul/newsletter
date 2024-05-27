@@ -1,3 +1,5 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module Email (sendSubscribedEmail) where
 
 import Control.Arrow (ArrowChoice (left))
@@ -5,8 +7,11 @@ import Control.Monad.Except (ExceptT, liftEither, liftIO)
 import Data.Aeson (ToJSON (toJSON), object, (.=))
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
+import Data.Tuple.Extra (both)
 import Db.Core (Subscriber (..))
+import Env (Secrets (..))
 import Network.HTTP.Simple
+import Network.HTTP.Types.URI (urlEncode)
 import Relude
 import System.Directory (doesFileExist)
 import System.FilePath (FilePath, (</>))
@@ -33,15 +38,20 @@ loadTemplate fileName = do
   let templateOrError = Mustache.compileTemplate fileName templateText
   liftEither $ left show templateOrError
 
-subscriberUnsubUrl :: Subscriber -> T.Text
-subscriberUnsubUrl = ("http://localhost:3000/unsubscribe/" <>) . subscriberId
+getUnsubUrl :: T.Text -> Subscriber -> T.Text
+getUnsubUrl serverUrl (Subscriber {subscriberId, subscriberEmail}) =
+  let (subId, subEmail) = both encodeForUrl (subscriberId, subscriberEmail)
+   in serverUrl <> "/unsubscribe?id=" <> subscriberId <> "&email=" <> subscriberEmail
+  where
+    encodeForUrl :: T.Text -> T.Text
+    encodeForUrl = decodeUtf8 . urlEncode True . encodeUtf8
 
 data PostmarkRequest = PostmarkRequest
-  { from :: T.Text,
-    to :: T.Text,
-    subject :: T.Text,
-    htmlBody :: T.Text,
-    messageStream :: T.Text
+  { postmarkFrom :: T.Text,
+    postmarkTo :: T.Text,
+    postmarkSubject :: T.Text,
+    postmarkBody :: T.Text,
+    postmarkMessageStream :: T.Text
   }
 
 instance ToJSON PostmarkRequest where
@@ -54,25 +64,28 @@ instance ToJSON PostmarkRequest where
         "MessageStream" .= messageStream
       ]
 
-sendEmail :: T.Text -> T.Text -> T.Text -> T.Text -> EitherIO ()
-sendEmail to subject body stream =
+-- | Send an email using the postmark HTTPs API.
+sendEmail :: ByteString -> T.Text -> T.Text -> T.Text -> T.Text -> EitherIO ()
+sendEmail apikey to subject body stream =
   do
+    -- Postmark free tier has a limit of 100 emails per month.
+    -- Once I have more users than that, I will need to either pay 15$ a month,
+    -- or roll my own mailserver.
     req' <- parseRequest "POST https://api.postmarkapp.com/email"
     let headers =
           [ ("Content-Type", "application/json"),
-            ("X-Postmark-Server-Token", "[REDACTED]"),
+            ("X-Postmark-Server-Token", apikey),
             ("Accept", "application/json")
           ]
         postMarkReq = PostmarkRequest "srijan@injuly.in" to subject body stream
         request = setRequestHeaders headers (setRequestBodyJSON postMarkReq req')
     response <- httpNoBody request
-    print (getResponseStatusCode response)
     return ()
 
-sendSubscribedEmail :: Subscriber -> EitherIO ()
-sendSubscribedEmail subscriber = do
+sendSubscribedEmail :: Secrets -> Subscriber -> EitherIO ()
+sendSubscribedEmail (Secrets {secretPostmarkKey, secretServerUrl}) subscriber = do
   template <- loadTemplate "subscribed.mustache"
-  let (email, unsubUrl) = (subscriberEmail subscriber, subscriberUnsubUrl subscriber)
+  let (email, unsubUrl) = (subscriberEmail subscriber, getUnsubUrl secretServerUrl subscriber)
       compileData = Mustache.object [("unsubscribe_url", Mustache.String unsubUrl)]
       htmlText = Mustache.substitute template compileData
-  sendEmail email "Testing!" htmlText "on-subscribe"
+  sendEmail secretPostmarkKey email "This is a test!" htmlText "on-subscribe"
