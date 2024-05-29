@@ -21,9 +21,9 @@ import qualified Text.Mustache.Types as Mustache
 templatesDir = "templates"
 
 type ErrorMessage = String
-
 type EitherIO a = ExceptT ErrorMessage IO a
 
+-- | Read a file from the file system, and return its contents as a Text.
 tryReadFile :: FilePath -> EitherIO T.Text
 tryReadFile filePath = do
   fileExists <- liftIO $ doesFileExist filePath
@@ -32,12 +32,15 @@ tryReadFile filePath = do
     else liftEither $ Left ("File not found: " <> filePath)
 
 -- | Load a mustache template from its file name relative to the templates directory.
+-- @fileName@ The name of the file to load, relative to the templates directory.
 loadTemplate :: FilePath -> EitherIO Mustache.Template
 loadTemplate fileName = do
   templateText <- tryReadFile (templatesDir </> fileName)
   let templateOrError = Mustache.compileTemplate fileName templateText
   liftEither $ left show templateOrError
 
+-- | Prepare the URL to unsubscribe a user from the newsletter.
+-- @serverUrl@: The URL of the server where the unsubscribe endpoint is hosted. (e.g: https://newsletter.injuly.in)
 getUnsubUrl :: T.Text -> Subscriber -> T.Text
 getUnsubUrl serverUrl (Subscriber {subscriberId, subscriberEmail}) =
   let (subId, subEmail) = both encodeForUrl (subscriberId, subscriberEmail)
@@ -65,6 +68,11 @@ instance ToJSON PostmarkRequest where
       ]
 
 -- | Send an email using the postmark HTTPs API.
+-- @apikey@ The API key for the postmark account.
+-- @to@ The email address of the recipient.
+-- @subject@ The subject of the email.
+-- @body@ The body of the email.
+-- @stream@ The message stream to send the email to.
 sendEmail :: ByteString -> T.Text -> T.Text -> T.Text -> T.Text -> EitherIO ()
 sendEmail apikey to subject body stream =
   do
@@ -82,6 +90,9 @@ sendEmail apikey to subject body stream =
     response <- httpNoBody request
     return ()
 
+-- | Send a welcome email to a new subscriber.
+-- @secrets@ The secrets required to send the email.
+-- @subscriber@ The subscriber to send the email to.
 sendSubscribedEmail :: Secrets -> Subscriber -> EitherIO ()
 sendSubscribedEmail (Secrets {secretPostmarkKey, secretServerUrl}) subscriber = do
   template <- loadTemplate "subscribed.mustache"
@@ -89,3 +100,5 @@ sendSubscribedEmail (Secrets {secretPostmarkKey, secretServerUrl}) subscriber = 
       compileData = Mustache.object [("unsubscribe_url", Mustache.String unsubUrl)]
       htmlText = Mustache.substitute template compileData
   sendEmail secretPostmarkKey email "This is a test!" htmlText "on-subscribe"
+
+

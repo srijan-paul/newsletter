@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 import Crypto.Random (MonadRandom (getRandomBytes))
+import qualified Data.Aeson as Aeson
 import Data.ByteArray.Encoding (Base (Base64), convertToBase)
 import qualified Data.ByteString as BS
 import qualified Data.Text as T
@@ -62,15 +63,15 @@ subscribeEndpoint App {appDatabase = db, appSecrets} = do
   where
     storeSubscriber :: T.Text -> IO ()
     storeSubscriber emailAddr = do
-      now      <- getCurrentTime
+      now <- getCurrentTime
       randomId <- generateRandomUserId
-      let timeS = fromMaybe (show now) (formatShowM iso8601Format now)
+      let timeStr = T.pack $ fromMaybe (show now) (formatShowM iso8601Format now)
           newSub =
             Subscriber
               { subscriberIsSubbed = True,
                 subscriberId = randomId,
                 subscriberEmail = emailAddr,
-                subscriberDate = T.pack timeS
+                subscriberDate = timeStr
               }
 
       insertSubscriber db newSub

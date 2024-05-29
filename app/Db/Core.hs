@@ -78,18 +78,7 @@ data Subscriber = Subscriber
   deriving (Generic, Show, Eq)
 
 instance FromRow Subscriber
-
 instance ToRow Subscriber
-
-collectRows :: forall r. (FromRow r) => Statement -> IO [r]
-collectRows stmt = go []
-  where
-    go :: [r] -> IO [r]
-    go acc = do
-      r <- nextRow @r stmt
-      case r of
-        Just row -> go (row : acc)
-        Nothing -> return acc
 
 fetchActiveSubscribers :: Db Open -> Subscriber -> IO [Subscriber]
 fetchActiveSubscribers (Db conn) subscriber =
