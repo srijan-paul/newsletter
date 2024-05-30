@@ -1,6 +1,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
-module Email (sendSubscribedEmail) where
+module Email (sendSubscribedEmail, sendToAll) where
 
 import Control.Arrow (ArrowChoice (left))
 import Control.Monad.Except (ExceptT, liftEither, liftIO)
@@ -21,6 +21,7 @@ import qualified Text.Mustache.Types as Mustache
 templatesDir = "templates"
 
 type ErrorMessage = String
+
 type EitherIO a = ExceptT ErrorMessage IO a
 
 -- | Read a file from the file system, and return its contents as a Text.
@@ -44,7 +45,7 @@ loadTemplate fileName = do
 getUnsubUrl :: T.Text -> Subscriber -> T.Text
 getUnsubUrl serverUrl (Subscriber {subscriberId, subscriberEmail}) =
   let (subId, subEmail) = both encodeForUrl (subscriberId, subscriberEmail)
-   in serverUrl <> "/unsubscribe?id=" <> subId <> "&email=" <> subEmail 
+   in serverUrl <> "/unsubscribe?id=" <> subId <> "&email=" <> subEmail
   where
     encodeForUrl :: T.Text -> T.Text
     encodeForUrl = decodeUtf8 . urlEncode True . encodeUtf8
@@ -101,4 +102,23 @@ sendSubscribedEmail (Secrets {secretPostmarkKey, secretServerUrl}) subscriber = 
       htmlText = Mustache.substitute template compileData
   sendEmail secretPostmarkKey email "This is a test!" htmlText "on-subscribe"
 
+-- | Send an email to a list of subscribers.
+-- @subject@ The subject of the email.
+-- @body@ The body of the email.
+-- @secrets@ The secrets required to send the email.
+-- @subscribers@ The list of subscribers to send the email to.
+sendToAll :: T.Text -> T.Text -> Secrets -> [Subscriber] -> EitherIO ()
+sendToAll subject body (Secrets {secretPostmarkKey, secretServerUrl}) subscribers = do
+  template <- loadTemplate "new_post.mustache"
+  -- TODO: do this concurrently.
+  forM_ subscribers $ \subscriber -> do
+    let email = subscriberEmail subscriber
+        unsubUrl = getUnsubUrl secretServerUrl subscriber
+        compileData =
+          Mustache.object
+            [ ("unsubscribe_url", Mustache.String unsubUrl),
+              ("body", Mustache.String body)
+            ]
+        htmlText = Mustache.substitute template compileData
+    sendEmail secretPostmarkKey email subject htmlText "new-post"
 

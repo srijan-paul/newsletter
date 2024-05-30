@@ -78,10 +78,11 @@ data Subscriber = Subscriber
   deriving (Generic, Show, Eq)
 
 instance FromRow Subscriber
+
 instance ToRow Subscriber
 
-fetchActiveSubscribers :: Db Open -> Subscriber -> IO [Subscriber]
-fetchActiveSubscribers (Db conn) subscriber =
+fetchActiveSubscribers :: Db Open -> IO [Subscriber]
+fetchActiveSubscribers (Db conn) =
   query_ conn "SELECT * FROM subscribers WHERE is_subbed = 1"
 
 insertSubscriber :: Db Open -> Subscriber -> IO ()
