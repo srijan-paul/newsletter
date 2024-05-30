@@ -5,59 +5,76 @@ import Prelude
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\), type (/\))
 import Effect (Effect)
+import Effect.Class (liftEffect)
 import Flame (Html, QuerySelector(..), Subscription)
 import Flame.Application.Effectful as FA
 import Flame.Html.Attribute as HA
 import Flame.Html.Element as HE
-import Flame.Subscription.Window (onLoad)
 import Flame.Types (NodeData)
+import Markdown (renderMarkdownToDiv)
 
 type Model =
   { emailSubject :: Maybe String
-  , emailBodyMd :: Maybe String
+  , emailBodyHtml :: Maybe String
   , authToken :: Maybe String
   }
 
-data Message = SendEmail | TextChanged | CreateEditor
+data Message
+  = SendEmail
+  | TextInput String
 
 -- | Initial state of the app
 init :: Model /\ (Maybe Message)
 init =
   { emailSubject: Nothing
-  , emailBodyMd: Nothing
+  , emailBodyHtml: Nothing
   , authToken: Nothing
   } /\ Nothing
 
-placeHolderText :: String
-placeHolderText =
-  """# This is an Email.
-Written in *markdown*!"""
-
 -- | `update` is called to handle events
 update :: FA.AffUpdate Model Message
-update { message: CreateEditor, model } = do
+update { message: (TextInput emailContent), model } = do
+  liftEffect $ renderMarkdownToDiv emailContent "preview"
   pure $ const model
 update { model } = pure $ const model
 
 -- | `view` is called whenever the model is updated
 view :: Model -> Html Message
 view _ = HE.main "main"
-  [ HE.div
-      [ HA.id "editor", HA.style [ ("width" /\ "50%"), ("height" /\ "400px") ] ]
-      [ HE.textarea' textAreaAttrs ]
-  ]
+  [ editorWithPreview, HE.div [HA.style [("margin-left" /\ "2em")] ] [sendButton] ]
+
   where
+  sendButton = HE.button
+    [ HA.class' "button", HA.style [ ("margin-top" /\ "20px") ] ]
+    "Send Mail"
+
+  editorWithPreview = HE.div
+    [ HA.class' "editor-container" ]
+    [ textArea, preview ]
+
+  preview = HE.div' [ HA.id "preview" ]
+  textArea = HE.div [ HA.class' "email-input" ] [ HE.textarea' textAreaAttrs ]
+
   textAreaAttrs :: Array (NodeData Message)
   textAreaAttrs =
     [ HA.id "markdownInput"
-    , HA.placeholder "Write your email in markdown..."
-    , HA.rows 10
-    , HA.cols 50
+    , HA.placeholder "Write your mail in markdown"
+    , HA.onInput TextInput
+    , HA.style
+        [ ("width" /\ "100%")
+        , ("height" /\ "100%")
+        , ("padding" /\ "0")
+        , ("resize" /\ "none")
+        , ("border" /\ "none")
+        , ("outline" /\ "none")
+        , ("overflow" /\ "auto")
+        , ("font-size" /\ "1.2em")
+        ]
     ]
 
 -- | Events that come from outside the `view`
 subscribe :: Array (Subscription Message)
-subscribe = [ onLoad CreateEditor ]
+subscribe = []
 
 -- | Mount the application on the given selector
 main :: Effect Unit

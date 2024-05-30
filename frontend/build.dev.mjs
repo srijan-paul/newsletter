@@ -1,6 +1,6 @@
 import esbuild from "esbuild"
 import pursPlugin from "esbuild-plugin-purescript"
-import copyStaticFiles from "esbuild-copy-static-files"
+import copy from "esbuild-plugin-copy"
 
 const ctx = await esbuild
   .context({
@@ -11,7 +11,16 @@ const ctx = await esbuild
       // allow importing Purescript modules in JavaScript files.
       pursPlugin(),
       // copy everything under `static` to `dist`.
-      copyStaticFiles({ src: "./static", dest: "./dist" })
+      copy({
+        // this is equal to process.cwd(), which means we use cwd path as base path to resolve `to` path
+        // if not specified, this plugin uses ESBuild.build outdir/outfile options as base path.
+        resolveFrom: 'cwd',
+        assets: {
+          from: ['./static/*'],
+          to: ['./dist'],
+        },
+        watch: true,
+      }),
     ],
     logLevel: "debug"
   })
