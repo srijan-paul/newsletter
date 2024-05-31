@@ -38,22 +38,10 @@ update { message: (TextInput emailContent), model } = do
   pure $ const model
 update { model } = pure $ const model
 
--- | `view` is called whenever the model is updated
-view :: Model -> Html Message
-view _ = HE.main "main"
-  [ editorWithPreview, HE.div [HA.style [("margin-left" /\ "2em")] ] [sendButton] ]
-
+emailBox :: Html Message
+emailBox = HE.div [ HA.class' "email-container" ] [ bodyInput ]
   where
-  sendButton = HE.button
-    [ HA.class' "button", HA.style [ ("margin-top" /\ "20px") ] ]
-    "Send Mail"
-
-  editorWithPreview = HE.div
-    [ HA.class' "editor-container" ]
-    [ textArea, preview ]
-
-  preview = HE.div' [ HA.id "preview" ]
-  textArea = HE.div [ HA.class' "email-input" ] [ HE.textarea' textAreaAttrs ]
+  bodyInput = HE.div [ HA.class' "email-body" ] [ HE.textarea' textAreaAttrs ]
 
   textAreaAttrs :: Array (NodeData Message)
   textAreaAttrs =
@@ -68,9 +56,29 @@ view _ = HE.main "main"
         , ("border" /\ "none")
         , ("outline" /\ "none")
         , ("overflow" /\ "auto")
-        , ("font-size" /\ "1.2em")
         ]
     ]
+
+-- | `view` is called whenever the model is updated
+view :: Model -> Html Message
+view _ = HE.main "main" [ mailEditor ]
+  where
+  mailEditor = HE.div [ HA.class' "mail-container" ]
+    [ subjectContainer, editorContainer ]
+
+  subjectContainer = HE.div
+    [ HA.class' "email-subject-container" ]
+    [ HE.input [ HA.placeholder "Subject line", HA.type' "text", HA.class' "subject" ]
+    , HE.button [ HA.class' "send-button", HA.onClick SendEmail ] "Send"
+    ]
+
+  editorContainer = HE.div
+    [ HA.class' "editor-and-preview-container" ]
+    [ emailBox, preview ]
+
+  preview = HE.div
+    [ HA.id "preview" ]
+    [ HE.div [ HA.class' "preview-default" ] "Preview will be shown here" ]
 
 -- | Events that come from outside the `view`
 subscribe :: Array (Subscription Message)
